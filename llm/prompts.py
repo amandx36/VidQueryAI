@@ -8,7 +8,6 @@ def get_prompt():
     )
     
     human_message = HumanMessagePromptTemplate.from_template("{question}")
-    input_variable = ["retrieved_chunks", "question"]
-    prompt = ChatPromptTemplate.from_messages([system_message, human_message], input_variables=input_variable)
+    prompt = ChatPromptTemplate.from_messages([system_message, human_message])
     
     return prompt

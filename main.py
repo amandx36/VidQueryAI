@@ -6,55 +6,101 @@ from llm.generator import get_llm_model
 from llm.prompts import get_prompt
 from processing.chunker import chunk_splitter
 
-from retrieval.embedder import get_embeddings_from_ollama
 from retrieval.vector_store import create_vector_store
 from retrieval.retriever import fetcher
 from utils.formatter import format_docs 
 
 from retrieval.embedder import Embeding_model
-from langchain_core.documents import Document
+
+# for extracting the youtube  url 
+
+from urllib.parse import urlparse, parse_qs
 
 # pipeline of chat RAG system
 
-def run_pipeline(video_id : str , user_query : str  ):
-    # step 1 load the utube data 
-    video_data = load_youtube_data(video_id, language="en")
+def run_pipeline(video_id: str, user_query: str, vector_store=None):
+    # step 1 load the utube data (only if vector_store not exists)
+    if not vector_store:
+        video_data = load_youtube_data(video_id, language="en")
 
-    # step 2 chunk the data into different chuks 
-    chunks = chunk_splitter(video_data)
+        # step 2 chunk the data into different chunks 
+        chunks = chunk_splitter(video_data)
 
-    #step 3 create the vector store using ollma and chroma and store in chroma db 
+        # step 3 create the vector store
+        vector_store = create_vector_store(chunks, Embeding_model, video_id)
 
-
-    chunkList : list[Document] = []
-    for chunk in chunks:
-        chunk_embedding = get_embeddings_from_ollama(chunk)
-        print(f"Chunk: {chunk}\nEmbedding: {chunk_embedding}\n")
-        chunkList.append((chunk, chunk_embedding))
-
-    vector_store = create_vector_store(chunkList, Embeding_model)
-
-    # step 4 retrival of data using the user query and vector db 
-
-    # step 5 formating the content 
-    content = format_docs(chunks)
+    # step 4 retrieval of data using the user query and vector db 
     retrieved_chunks = fetcher(vector_store, user_query)
 
-    # Step 5  prompt generating 
-    prompt = get_prompt(retrieved_chunks, user_query)
+    # step 5 formatting the content 
+    content = format_docs(retrieved_chunks)
     
-    # step 6 for generating the response using llm 
-
+    # step 6 prompt generating 
+    prompt_template = get_prompt()
+    prompt = prompt_template.format(retrieved_chunks=content, question=user_query)  
+    
+    # step 7 generate the response using llm 
     llm = get_llm_model()
-    response = llm(prompt)
+    response = llm.invoke(prompt)
 
-    return response
+    return response, vector_store  
+def extract_video_id(url:str)-> str:
+    try:
+        parsed_url = urlparse(url)
+
+        # Case 1: normal youtube link
+        if parsed_url.hostname in ["www.youtube.com", "youtube.com"]:
+            return parse_qs(parsed_url.query).get("v", [None])[0]
+
+        # Case 2: shortened link (youtu.be)
+        if parsed_url.hostname == "youtu.be":
+            return parsed_url.path.lstrip("/")
+
+        return None
+
+    except Exception:
+        return None
 
 if __name__ == "__main__":
-    video_id = "3T3wMHcrJTuMida5" 
-    user_query = "What is the main topic of the video?"
-    response = run_pipeline(video_id, user_query)
-    print("Response from RAG system:", response)
+    vector_store = None
+    video_id = None
 
+    while True:
+        print("\n1. Load video")
+        print("2. Ask question")
+        print("3. Exit")
 
+        choice = input("Enter choice: ")
 
+        if choice == "1":
+            url = input("Enter YouTube URL: ")
+            video_id = extract_video_id(url)
+
+            if not video_id:
+                print("Invalid URL")
+                continue
+
+            # reset store for new video
+            vector_store = None
+            print("Video loaded")
+
+        elif choice == "2":
+            if not video_id:
+                print("Load video first")
+                continue
+
+            query = input("Enter your question: ")
+
+            response, vector_store = run_pipeline(
+                video_id,
+                query,
+                vector_store
+            )
+
+            print("\nAnswer:", response)
+
+        elif choice == "3":
+            break
+
+        else:
+            print("Invalid choice")

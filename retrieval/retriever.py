@@ -4,11 +4,9 @@
 def fetcher(vector_store, query):
     try:
         return vector_store.similarity_search(
-            
-            search_query = query,
-            k = 4 
-            
-            )
+            query=query,
+            k=4
+        )
     except Exception as e:
         print(f"Error fetching data: {e}")
-        return "Unable to fetch data"
+        return []
