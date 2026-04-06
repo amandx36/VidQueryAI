@@ -14,3 +14,4 @@ def chunk_splitter (transcript_text : str):
 document = chunk_splitter("This is a sample transcript text that needs to be split into smaller chunks for processing. The text splitter will create chunks of a specified size with some overlap to ensure that the context is preserved across chunks.")
 
 print(document)
+print(len(document))
