@@ -70,7 +70,7 @@ if __name__ == "__main__":
         print("2. Ask question")
         print("3. Exit")
 
-        choice = input("Enter choice: ")
+        choice = input("Enter choice: ").strip()
 
         if choice == "1":
             url = input("Enter YouTube URL: ")

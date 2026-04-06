@@ -18,7 +18,9 @@ def generate_id(text: str, video_id: str) -> str:
 #  Main function
 def create_vector_store(chunks, model, video_id: str, vector_store=None):
     try:
-        persist_directory = os.path.abspath("../VectorDataBase/chroma_db")
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        persist_directory = os.path.join(BASE_DIR, "VectorDataBase", "chroma_db")
+
         os.makedirs(persist_directory, exist_ok=True)  #  ensure folder exists
 
         db_file = os.path.join(persist_directory, "chroma.sqlite3")
@@ -70,6 +72,9 @@ def create_vector_store(chunks, model, video_id: str, vector_store=None):
                 collection_name="youtube_chunks",
                 persist_directory=persist_directory
             )
+            # forcing to save in database 
+            vector_store.persist()
+            print("Chunks count:", len(chunks))
 
         return vector_store
 
