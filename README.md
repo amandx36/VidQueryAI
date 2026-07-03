@@ -9,6 +9,107 @@ VidQuery AI transforms how users interact with video content by providing a sema
 This system implements a complete RAG pipeline with persistent vector storage, intelligent chunking, and advanced deduplication mechanisms to ensure efficient, scalable knowledge management across multiple videos.
 
 ---
+# Workflow 
+
+---
+
+##  Workflow Diagram 
+
+### 1. Mermaid Diagram 
+
+
+```mermaid
+flowchart TD
+    A[User Input: YouTube URL] --> B["Step 1: ingestion/youtube_loader.py<br/>Fetch transcript via YouTube Transcript API"]
+    B --> C["Step 2: processing/chunker.py<br/>RecursiveCharacterTextSplitter<br/>chunk_size=100, overlap=0"]
+    C --> D["Step 3: retrieval/embedder.py<br/>Generate embeddings via<br/>OllamaEmbeddings (nomic-embed-text)"]
+    D --> E{"Step 4: retrieval/vector_store.py<br/>MD5 hash-based dedup check"}
+    E -- "New chunk" --> F["Store in ChromaDB<br/>with video_id + chunk_id metadata"]
+    E -- "Duplicate chunk" --> G["Skip storage<br/>(saves 30–40% storage)"]
+    F --> H["Step 5: retrieval/retriever.py<br/>Semantic similarity_search (k=4)"]
+    G --> H
+    H --> I["Step 6: utils/formatter.py<br/>Format top-4 chunks into context string"]
+    I --> J["Step 7a: llm/prompts.py<br/>Build ChatPromptTemplate with context"]
+    J --> K["Step 7b: llm/generator.py<br/>Gemini 2.5 Flash Lite (temperature=0.7)"]
+    K --> L["Answer returned to User"]
+
+    M["Second+ query on same video"] -.-> H
+    M -.->|"Skips Steps 1–4<br/>reuses in-memory vector store"| N["Response in under 500ms"]
+
+    style A fill:#1a1a2e,color:#fff
+    style L fill:#16213e,color:#fff
+    style N fill:#0f3460,color:#fff
+```
+
+### 2. ASCII Fallback 
+
+```
+                     USER INPUT (YouTube URL)
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 1 — ingestion/youtube_loader.py               │
+   │ Fetch transcript via YouTube Transcript API        │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 2 — processing/chunker.py                     │
+   │ RecursiveCharacterTextSplitter                     │
+   │ (chunk_size=100, overlap=0)                        │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 3 — retrieval/embedder.py                     │
+   │ OllamaEmbeddings (nomic-embed-text, local, ~274MB)  │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 4 — retrieval/vector_store.py                 │
+   │ MD5(video_id + normalized_text) → dedup check       │
+   │  ├─ New chunk      → Store in ChromaDB (+metadata) │
+   │  └─ Duplicate chunk → Skip (saves 30–40% storage)   │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 5 — retrieval/retriever.py                    │
+   │ similarity_search(query, k=4)                      │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 6 — utils/formatter.py                        │
+   │ Format top-4 chunks into a single context string    │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 7a — llm/prompts.py                           │
+   │ ChatPromptTemplate (context + "don't hallucinate")   │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+   ┌───────────────────────────────────────────────────┐
+   │ STEP 7b — llm/generator.py                         │
+   │ Gemini 2.5 Flash Lite (temperature=0.7)             │
+   └───────────────────────────────────────────────────┘
+                              │
+                              ▼
+                    ANSWER RETURNED TO USER
+
+   ─────────────────────────────────────────────────────
+   REPEAT QUERY (same video already loaded):
+   Skips Steps 1–4 entirely → reuses in-memory vector store
+   → Steps 5–7 only → response in <500ms
+   ─────────────────────────────────────────────────────
+```
+
+---
+
+
 
 ## � Current Configuration
 
